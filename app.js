@@ -202,7 +202,7 @@ app.post("/program/deactivate/:progid", (req, res, next) => {
 
     let prog = programs.find(p=>p.id==req.params.progid) 
 
-    if(prog.isactivated == 1) {
+    if(prog != undefined && prog.isactivated == 1) {
         programs = programs.map(p=>p.id == req.params.progid ? {...p, isactivated:0, rez:p.maxrez}:p)
     }
     res.json(programs)
