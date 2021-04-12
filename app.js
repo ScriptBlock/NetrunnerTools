@@ -3,7 +3,8 @@ var app = express();
 app.use(express.json()); //Used to parse JSON bodies
 
 var programList = require("./programs")
-var iceList = require("./blackices")
+var iceList = require("./blackices");
+const { json } = require("express");
 
 //var archs = []
 var archs = [{ "name":"Arasaka Tower", "description": "Default", "owner": 3, "id": 1 }]
@@ -61,6 +62,7 @@ var ices = [
       "activationcount": 0,
       "maxrez": 7,
       "netrunnerid": 1,
+      isactivated:0
 
     },
 */
@@ -192,83 +194,62 @@ app.get("/damageprogram/:runnerid/:progid", (req, res, next) => {
     res.json(runners);
     
 });
-
-app.get("/installprogram/:runnerid/:progname", (req, res, next) => {
-    console.log("installing program " + req.params.progname + " for runnerid " + req.params.runnerid);
-    runners.forEach(r => {
-        if(r.id == req.params.runnerid) {
-            console.log("found netrunner with that id: " + r.name);
-            if(r.installedPrograms.length < r.totalSlots) {
-                console.log("netrunner has enough slots to install a new program");
-                let progDetails = programList.find(p => p.name == req.params.progname);
-                let newProg = new Program(progDetails);
-                newProg.id = ++programCounter;
-                console.log("installing program: " + progDetails.name + " with id: " + newProg.id);
-                r.installedPrograms.push(newProg);
-            } else {
-                console.log("netrunner doesn't have any additional slots");
-            }
-        }
-    })
-    res.json(runners);
-
-});
-
-app.get("/removeprogram/:runnerid/:progid", (req, res, next) => {
-    console.log("removing program id: " + req.params.progid + " for player id: " + req.params.runnerid);
-    let runnerid = req.params.runnerid;
-    let progid = req.params.progid;
-    runners.forEach(r => {
-        if(r.id == runnerid) {
-            console.log("found netrunner with id: " + runnerid);
-            r.rezzedPrograms = r.rezzedPrograms.filter(x => x != progid);
-            console.log("derezzed programid: " + progid);
-            r.installedPrograms = r.installedPrograms.filter(x => x.id != progid);
-            console.log("removed program with id: " + progid);
-        }
-    });
-    res.json(runners);
-
-});
 */
 }
 
-///------------------------  PROGRAM FUNCTIONS ------------------------////
+app.post("/program/deactivate/:progid", (req, res, next) => {
+    console.log("/program/deactivate called")
 
-// app.post("/ice/:iceid?", (req, res, next) => {
-//     console.log("post /ice called")
+    let prog = programs.find(p=>p.id==req.params.progid) 
 
-//     if(req.params.iceid != undefined && ices.filter(i => i.id == req.params.iceid).length > 0) {
-//         console.log("Updating existing ICE")
-//         ices = ices.map(i => i.id == req.params.iceid ? {...i, ...req.body} : i)
-//     } else {
-//         console.log("Did not find an ICE with that id, adding a new ICE")
+    if(prog.isactivated == 1) {
+        programs = programs.map(p=>p.id == req.params.progid ? {...p, isactivated:0, rez:p.maxrez}:p)
+    }
+    res.json(programs)
+})
 
-//         let targetICEName = req.body.icename
-//         if(targetICEName != undefined) {
-//             console.log(`Looking for an ICE with name ${targetICEName}`)
-//             let newICEID = ices.length > 0 ? ices.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
-//             iceDetails = iceList.find(i => i.name == targetICEName)
-//             if(iceDetails != undefined) {
-//                 console.log(`Found target ICE program`)
-//                 ices = [...ices, {...iceDetails, "id": newICEID, "roomid": req.body.roomid, "mapid": req.body.mapid, "tracking": req.body.tracking}]
-//             } else {
-//                 console.log("Wan't able to find that ICE")
-//             }
-//         } else {
-//             console.log("Target iCE to create was not provided")
-//         }
+app.post("/program/activate/:progid", (req, res, next) => {
+    console.log("/program/activate called")
 
-//     }
+    let prog = programs.find(p => p.id == req.params.progid)
+    console.log(`Attempting to activate program id ${prog.id}`)
 
-//     res.json(ices);
-// })
+    if(prog.isactivated != 1) { //this program isn't activated
+        if(prog.maxactivations == -1 || prog.activationcount +1 <= prog.maxactivations) {
+            programs = programs.map(p => {
+                if(p.id == req.params.progid) {
+                    p.activationcount += 1
+                    if(!p.class.match(/attacker/i)) {
+                        p.isactivated = 1
+                    }
+                    return p
+                } else {
+                    return p
+                }
+            })
+        } else {
+            console.log(`Program has already been activated too many times ${prog.activationcount}/${prog.maxactivations}`)
+        }
+    } else {
+        console.log("program is already activated")
+    }
+    res.json(programs   )
+})
 
-// app.delete("/ice/:iceid", (req, res, next) => {
-//     console.log("delete /ice called")
-//     ices = ices.filter(i => i.id != req.params.iceid)
-//     res.json(ices)
-// })
+app.get("/program/installed/:netrunnerid", (req, res, next) => {
+    console.log("get /program/installed called")
+
+    let retVal = programs.filter(p => p.netrunnerid == req.params.netrunnerid)
+    res.json(retVal)
+
+})
+
+app.post("/program/remove/:progid", (req, res, next) => {
+    console.log("post /program/remove called")
+    programs = programs.filter(p => p.id != req.params.progid)
+    res.json(programs)
+
+})
 
 app.post("/program/install/:netrunnerid", (req, res, next) => {
     console.log("post /program/install called")
@@ -286,7 +267,7 @@ app.post("/program/install/:netrunnerid", (req, res, next) => {
             if(ipfn.length < netrunner.totalSlots) {
                 console.log("Installing program")
                 let newProgID = programs.length > 0 ? programs.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
-                prog = {...prog, "id": newProgID, "maxrez": prog.rez, "activationcount":0, "netrunnerid": req.params.netrunnerid}
+                prog = {...prog, "id": newProgID, "maxrez": prog.rez, "activationcount":0, "netrunnerid": req.params.netrunnerid, "isactivated":0}
                 programs = [...programs, prog]
             } else {
                 console.log("That netrunner doesn't have enough free spots to install a new program")
@@ -303,6 +284,9 @@ app.post("/program/install/:netrunnerid", (req, res, next) => {
 
 
 ///------------------------  BLACKICE FUNCTIONS ------------------------////
+//TODO damage ice
+//TODO set tracking
+
 app.post("/ice/:iceid?", (req, res, next) => {
     console.log("post /ice called")
 
