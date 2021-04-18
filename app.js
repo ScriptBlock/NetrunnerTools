@@ -26,7 +26,9 @@ var rooms = [{"id":1, "name": "origin", "mapid": 1},
 1: origin (password-10)
            3:l2r2 (ice)           -  5:l3r2 (file) - 9:l4r2 (password-15)  - 10:l5r2 (controlpoint) 
 
-           dv-14: 1,2,4,6,3,5,9
+            dv-10: 1,2,4,6,3,5,9 (without access to room 6 configured)
+           dv-10: 1,2,4,6,7,3,5,9 (with access to room 6 configured)
+           dv-14: 1,2,4,6,7,3,5,9
            dv-15: 1,2,4,6,7,3,5,9,10
            dv-18: 1,2,4,6,7,8,3,5,9,10
 
@@ -52,9 +54,8 @@ var roomcontents = [
 
 ];
 
-var playerPasswords = [
-    {"id": 1, "netrunnerid": 1, "roomid": 1, "hacked": true},
-    {"id": 2, "netrunnerid": 1, "roomid": 3, "hacked": false, "password":"poooop"}
+var netrunnerAccess = [
+    {"id": 1, "netrunnerid": 1, "roomid": 6}
 ]
 
 const defaultNetrunner = {"interface": 4, "totalSlots": 3, "speed": 4, "damage": 0, "discoveredrooms":[]}
@@ -317,11 +318,17 @@ function pathfind(netrunnerid, origin, dvroll) {
             console.log(`Netrunner ${netrunnerObject.id} already discovered the next rooms, traversing down`)
             traverseDown = true
         } else if(thisRoomContents !== undefined && thisRoomContents.type == "password") {
-            if(dvroll >= thisRoomContents.dv) {
-                console.log(`Netrunner ${netrunnerObject.id} beat the password DV of ${thisRoomContents.dv} with a ${dvroll}, traversing down`)
+            let roomAccess = netrunnerAccess.find(a => a.roomid == roomid && a.netrunnerid == netrunnerid)
+            if(roomAccess != undefined) {
+                console.log(`Pre-existing access exists for roomid ${roomid}`)
                 traverseDown = true
             } else {
-                console.log(`Netrunner ${netrunnerObject.id} did not beat the password DV of ${thisRoomContents.dv} with a ${dvroll}, preventing traversal`)
+                if(dvroll >= thisRoomContents.dv) {
+                    console.log(`Netrunner ${netrunnerObject.id} beat the password DV of ${thisRoomContents.dv} with a ${dvroll}, traversing down`)
+                    traverseDown = true
+                } else {
+                    console.log(`Netrunner ${netrunnerObject.id} did not beat the password DV of ${thisRoomContents.dv} with a ${dvroll}, preventing traversal`)
+                }
             }
         } else if(thisRoomContents == undefined || thisRoomContents.type != "password") {
             console.log(`There is nothing blocking the traversal down`)
@@ -342,6 +349,9 @@ function pathfind(netrunnerid, origin, dvroll) {
 	return foundRooms
 }
 
+//TODO make a version of this where you can specify a starting room and possibly 
+// incorporate maximum depth searches due to netrunner level - this is in the rules and would provide
+// a way to limit the depth of discovery of an architecture
 app.post("/pathfind/:netrunnerid/:mapid", (req, res, next) => {
     console.log("post /pathfind called")
     let rolledDV = req.body.dv
@@ -396,9 +406,78 @@ app.get("/netrunner/:netrunnerid?", (req, res, next) => {
     res.json(retVal)
 })
 
+
+/*
+var roomcontents = [
+    {"id": 1, "roomid": 1, "type": "password", "details": "hunter2", "dv":10}, 
+    {"id": 2, "roomid": 2, "type": "controlpoint", "details":"turret", "dv":12},
+    {"id": 3, "roomid": 6, "type": "password", "details":"poooop", "dv":14},
+    {"id": 4, "roomid": 7, "type": "password", "details":"l0vemoney", "dv":18},
+    {"id": 5, "roomid": 8, "type": "root", "details":"root", "dv":0},
+    {"id": 6, "roomid": 5, "type": "file", "details":"Ransom details", "dv":8},
+    {"id": 7, "roomid": 9, "type": "password", "details": "aaaa", "dv": 15},
+    {"id": 8, "roomid": 10, "type": "controlpoint", "details": "guns", "dv": 14}
+
+];
+
+var netrunnerAccess = [
+    {"id": 1, "netrunnerid": 1, "roomid": 1},
+    {"id": 2, "netrunnerid": 1, "roomid": 3}
+]
+
+*/
+
 ///------------------------  ROOM CONTENTS FUNCTIONS ------------------------////
 //TODO there's a bug here.  when you call upate you can update a content iD that has a mismatched room id.  
 //its no big deal because the roomid passed in doesn't do anything on a content update, only there to validate for new items
+app.post("/enterpassword/:roomid/:netrunnerid", (req, res, next) => {
+    console.log(`post /enterpassword called`)
+    let runner = netrunners.find(n => n.id == req.params.netrunnerid)
+    let content = roomcontents.find(c => c.roomid == req.params.roomid && c.type == "password")
+    let existingAccess = netrunnerAccess.find(a => a.roomid == content.roomid && a.netrunnerid == runner.id)
+    let password = req.body.pwd
+
+    if(existingAccess == undefined) {
+        if(runner != undefined && content != undefined && password != undefined) {
+            console.log(`Entering password ${password} for room ${content.roomid} by netrunner ${runner.id}`)
+            if(content.details == password) {
+                console.log("Password entered successfully")
+                let newAccessID = netrunnerAccess.length > 0 ? netrunnerAccess.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
+                netrunnerAccess = [...netrunnerAccess, {"id":newAccessID, "netrunnerid": runner.id, "roomid": content.roomid}]
+            } else {
+                console.log("invalid password")
+            }
+        }
+    } else {
+        console.log("That netrunner already has access to that room")
+    }
+    res.json(netrunnerAccess)
+
+})
+
+app.post("/backdoor/:roomid/:netrunnerid", (req, res, next) => {
+    console.log("post /backdoor called")
+    let runner = netrunners.find(n => n.id == req.params.netrunnerid)
+    let content = roomcontents.find(c => c.roomid == req.params.roomid && c.type == "password")
+    let existingAccess = netrunnerAccess.find(a => a.roomid==req.params.roomid && a.netrunnerid==req.params.netrunnerid)
+    let dv = req.body.dv
+
+    if(existingAccess != undefined) {
+        console.log(`The specified netrunner ${req.params.netrunnerid} and roomid ${req.params.roomid} access is already granted`)
+    } else if(runner == undefined) {
+        console.log("The specified choomba doesn't exist")
+    } else {
+        if(content != undefined && dv != undefined) {
+            if(dv >= content.dv) {
+                console.log(`Provided DV (${dv} beats or equals password dv of ${content.dv})`)
+                let newAccessID = netrunnerAccess.length > 0 ? netrunnerAccess.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
+                netrunnerAccess = [...netrunnerAccess, {"id":newAccessID, "netrunnerid": req.params.netrunnerid, "roomid": req.params.roomid}]
+            }
+        }
+    }
+    res.json(netrunnerAccess)
+})
+
 app.post("/roomcontents/:roomid/:contentid?", (req, res, next) => {
     console.log("post /roomcontents called")
 
@@ -439,8 +518,9 @@ app.get("/roomcontents/:roomid/:contentid?", (req, res, next) => {
 
 })
 
+
+
 ///------------------------  ROOM FUNCTIONS ------------------------////
-//TODO DEAL WITH PLAYERS BEATING PASSWORDS
 app.delete("/room/:roomid", (req, res, next) => {
     console.log("delete /room called")
     rooms = rooms.filter(r => r.id != req.params.roomid) 
