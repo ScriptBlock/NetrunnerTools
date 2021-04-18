@@ -15,14 +15,22 @@ var rooms = [{"id":1, "name": "origin", "mapid": 1},
 {"id":4, "name": "l3r1", "sourceroom": 2, "mapid": 1},
 {"id":5, "name": "l3r2", "sourceroom": 3, "mapid": 1},
 {"id":6, "name": "l4r1", "sourceroom": 4, "mapid": 1},
-{"id":7, "name": "l5r1", "sourceroom": 6, "mapid": 1}
+{"id":7, "name": "l5r1", "sourceroom": 6, "mapid": 1},
+{"id":8, "name": "l6r1", "sourceroom": 7, "mapid": 1},
+{"id":9, "name": "l4r2", "sourceroom": 5, "mapid": 1},
+{"id":10, "name": "l5r2", "sourceroom": 9, "mapid": 1}
 ]
 
 /*
-           2:l2r1 (controlpoint)  -  4:l3r1 (ice)  - 6:l4r1 (password)  - 7:l5r1 (root)  
-1: origin (password)
-           3:l2r2 (ice)  -  5:l3r2 (file)
-*/
+           2:l2r1 (controlpoint)  -  4:l3r1 (ice)  - 6:l4r1 (password-14)  - 7:l5r1 (password-18) - 8:l6r1 (root)  
+1: origin (password-10)
+           3:l2r2 (ice)           -  5:l3r2 (file) - 9:l4r2 (password-15)  - 10:l5r2 (controlpoint) 
+
+           dv-14: 1,2,4,6,3,5,9
+           dv-15: 1,2,4,6,7,3,5,9,10
+           dv-18: 1,2,4,6,7,8,3,5,9,10
+
+           */
 
 
 var contenttypes = [
@@ -35,44 +43,34 @@ var contenttypes = [
 var roomcontents = [
     {"id": 1, "roomid": 1, "type": "password", "details": "hunter2", "dv":10}, 
     {"id": 2, "roomid": 2, "type": "controlpoint", "details":"turret", "dv":12},
-    {"id": 3, "roomid": 6, "type": "password", "details":"l0vemoney", "dv":14},
-    {"id": 4, "roomid": 7, "type": "root", "details":"root", "dv":0},
-    {"id": 5, "roomid": 5, "type": "file", "details":"Ransom details", "dv":8}
+    {"id": 3, "roomid": 6, "type": "password", "details":"poooop", "dv":14},
+    {"id": 4, "roomid": 7, "type": "password", "details":"l0vemoney", "dv":18},
+    {"id": 5, "roomid": 8, "type": "root", "details":"root", "dv":0},
+    {"id": 6, "roomid": 5, "type": "file", "details":"Ransom details", "dv":8},
+    {"id": 7, "roomid": 9, "type": "password", "details": "aaaa", "dv": 15},
+    {"id": 8, "roomid": 10, "type": "controlpoint", "details": "guns", "dv": 14}
 
 ];
+
+var playerPasswords = [
+    {"id": 1, "netrunnerid": 1, "roomid": 1, "hacked": true},
+    {"id": 2, "netrunnerid": 1, "roomid": 3, "hacked": false, "password":"poooop"}
+]
+
+const defaultNetrunner = {"interface": 4, "totalSlots": 3, "speed": 4, "damage": 0, "discoveredrooms":[]}
 
 var netrunners = [
     {"id": 1, "name": "CrashOverride", "interface": 4, "totalSlots": 3, "speed": 4, "damage": 0, "mapid":1, "roomid":1, "discoveredrooms":[]}
 ]
 
 var ices = [
-    {"id": 1, "name": "Asp", "Per": 4, "Spd": 6, "Atk": 2, "Def": 2, "Rez": 15, "mapid":1, "roomid":4, "tracking": 0},
-    {"id": 2, "name": "Giant", "Per": 2, "Spd": 2, "Atk": 8, "Def": 4, "Rez": 25, "mapid":1, "roomid":3, "tracking": 0} 
+    {"id": 1, "name": "Asp", "Per": 4, "Spd": 6, "Atk": 2, "Def": 2, "Rez": 15, "mapid":1, "roomid":4, "tracking": 0, "isactive": 1},
+    {"id": 2, "name": "Giant", "Per": 2, "Spd": 2, "Atk": 8, "Def": 4, "Rez": 25, "mapid":1, "roomid":3, "tracking": 0, "isactive": 1} 
 ] //this is active black ices.  full copies of black ices
 
-
-/*
-    { "class": "booster",
-      "name": "Eraser",
-      "atk": 0,
-      "def": 0, 
-      "rez": 7,
-      "effect": "Increase all Cloak checks you make by +2 as long as this program remains rezzed",
-      "maxactivations": -1,
-      "activationcount": 0,
-      "maxrez": 7,
-      "netrunnerid": 1,
-      isactivated:0
-
-    },
-*/
 var programs = [] //this is rezzed programs.  this will be full copies of programs.
 var demons = [] 
-
-
 var initQueue = []; // [{"type": "netrunner", "id": 1}] in descending order
-
-
 var abilities = [
     "Scanner",
     "Backdoor",
@@ -91,113 +89,38 @@ function getRndInteger(min, max) {
     return Math.floor(Math.random() * (max - min + 1) ) + min;
 }
 
-{ // functions to be refactored... sigh
-/*
+///------------------------  PROGRAMS FUNCTIONS ------------------------////
 
-app.get("/installedprograms/:runnerid", (req, res, next) => {
-    console.log("listing installed programs for a netrunner");
-    res.json(runners.find(r => r.id == req.params.runnerid).installedPrograms);
-});
+app.get("/programs/rezzed/:netrunnerid", (req, res, next) => {
+    let retVal = programs.filter(p=>p.netrunnerid==req.params.netrunnerid && p.isactivated==1)
+    res.json(retVal)
+})
 
-app.get("/rezzedprograms/:runnerid", (req, res, next) => {
-    console.log("listing activated programs for a netrunner");
-    var rezzedprograms = [];
-    runners.find(r => r.id == req.params.runnerid).rezzedPrograms.forEach(r => {
-        rezzedprograms.push(runners.find(r => r.id == req.params.runnerid).installedPrograms.find(p => p.id == r));
-    });
-    res.json(rezzedprograms);
-});
-
-app.get("/activateprogram/:runnerid/:progid", (req, res, next) => {
-    let progid = req.params.progid;
-    console.log("attempting to activate program: " + progid);
-    runners.forEach(r => {
-        if(r.id == req.params.runnerid) {
-            console.log("found netrunner with ID: " + req.params.runnerid + " - " + r.name);
-            var programInstance
-             
-            if(r.installedPrograms.find(p => p.id == progid) != undefined) {
-                console.log("found program with that ID for that netrunner.  checking to make sure it's not already active");
-                programInstance = r.installedPrograms.find(p => p.id == progid);
-                if(!r.rezzedPrograms.includes(progid)) {
-                    console.log("that program does not appear to be rezzed");
-                    if(programInstance.activationcount < programInstance.maxactivations || programInstance.maxactivations == -1) {
-                        console.log("program has not reached maximum activations");
-                        if(programInstance.class.match(/attacker/i)) {
-                            console.log("program instance: " + programInstance.name + "[" + programInstance.id + "] is an attacker - auto-derezzing");
-                        } else {
-                            r.rezzedPrograms.push(progid);
-                            r.installedPrograms.forEach(p => {
-                                if(p.id == progid) {
-                                    p.activationcount = p.activationcount+1;
-                                    console.log("incrementing programs activations count to: " + p.activationcount);
-                                    console.log("setting programs rez to " + p.maxrez);
-                                    p.rez = p.maxrez;
-                                }
-                            })
-                        }
-                        console.log("action: " + programInstance.effect);
-                    } else {
-                        console.log("program has already been activated the maximum number of times");
-                    }
-                } else {
-                    console.log("program id " + progid + " for " + req.params.runnerid + " already rezzed");
+app.post("/programs/damage/:progid", (req, res, next) => {
+    console.log("/programs/damage called")
+    let prog = programs.find(p=>p.id=req.params.progid)
+    let damage = req.body.damage
+    if(prog != undefined && prog.isactivated == 1 && damage > 0)  {
+        console.log(`Applying ${damage} damage to progid ${prog.id}`)
+        programs = programs.map(p => {
+            if(p.id == req.params.progid) {
+                p.rez -= damage
+                if(p.rez <= 0) {
+                    console.log("Damage has killed the program.  Derezzing")
+                    p.isactivated = 0
+                    p.rez = 0
                 }
-            } else {
-                console.log("did not find program id: " + progid + " for that netrunner");
             }
-        } else {
-            console.log("did not find netrunner with id: " + req.params.runnerid);
-        }
-    });
-    res.json(runners);
-});
+            return p
+        })
+    } else {
+        console.log(`program ${req.params.progid} is not activated or damage was < 0`)
+    }
+    res.json(programs)
 
-app.get("/deactivateprogram/:runnerid/:progid", (req, res, next) => {
-    let progid = req.params.progid;
-    console.log("attempting to activate program: " + progid);
-    runners.forEach(r => {
-        if(r.id == req.params.runnerid) {
-            console.log("found netrunner with ID: " + req.params.runnerid + " - " + r.name);
-            r.rezzedPrograms = r.rezzedPrograms.filter(x => x != progid);
-            console.log("derezzed programid: " + progid);
-        }
-    });
-    res.json(runners);
-});
+})
 
-
-app.get("/damageprogram/:runnerid/:progid", (req, res, next) => {
-    let progid = req.params.progid;
-    let damage = req.query["damage"];
-    console.log("attempting to damage program: " + progid);
-    runners.forEach(r => {
-        if(r.id == req.params.runnerid) {
-            console.log("found netrunner with ID: " + req.params.runnerid + " - " + r.name);
-            r.installedPrograms.forEach(p => {
-                if(p.id == progid && r.rezzedPrograms.includes(progid)) {
-                    console.log("that netrunner has matching program active");
-                    //todo check to see if damage would kill program and/or apply damage
-                    p.rez -= damage;
-                    if(p.rez <= 0) {
-                        r.rezzedPrograms = r.rezzedPrograms.filter(x => x != progid);
-                        console.log("derezzed programid due to damage: " + progid);            
-                    } else {
-                        console.log("damaged program");
-                    }
-                } else {
-                    console.log("that netrunning doesn't have that program installed and/or running");
-                }
-            });
-        }
-    });
-    res.json(runners);
-    
-});
-*/
-}
-
-app.post("/program/deactivate/:progid", (req, res, next) => {
+app.post("/programs/deactivate/:progid", (req, res, next) => {
     console.log("/program/deactivate called")
 
     let prog = programs.find(p=>p.id==req.params.progid) 
@@ -205,11 +128,12 @@ app.post("/program/deactivate/:progid", (req, res, next) => {
     if(prog != undefined && prog.isactivated == 1) {
         programs = programs.map(p=>p.id == req.params.progid ? {...p, isactivated:0, rez:p.maxrez}:p)
     }
+
     res.json(programs)
 })
 
-app.post("/program/activate/:progid", (req, res, next) => {
-    console.log("/program/activate called")
+app.post("/programs/activate/:progid", (req, res, next) => {
+    console.log("/programs/activate called")
 
     let prog = programs.find(p => p.id == req.params.progid)
     console.log(`Attempting to activate program id ${prog.id}`)
@@ -219,13 +143,12 @@ app.post("/program/activate/:progid", (req, res, next) => {
             programs = programs.map(p => {
                 if(p.id == req.params.progid) {
                     p.activationcount += 1
+                    p.rez = p.maxrez
                     if(!p.class.match(/attacker/i)) {
                         p.isactivated = 1
                     }
-                    return p
-                } else {
-                    return p
-                }
+                } 
+                return p
             })
         } else {
             console.log(`Program has already been activated too many times ${prog.activationcount}/${prog.maxactivations}`)
@@ -236,7 +159,7 @@ app.post("/program/activate/:progid", (req, res, next) => {
     res.json(programs   )
 })
 
-app.get("/program/installed/:netrunnerid", (req, res, next) => {
+app.get("/programs/installed/:netrunnerid", (req, res, next) => {
     console.log("get /program/installed called")
 
     let retVal = programs.filter(p => p.netrunnerid == req.params.netrunnerid)
@@ -244,39 +167,40 @@ app.get("/program/installed/:netrunnerid", (req, res, next) => {
 
 })
 
-app.post("/program/remove/:progid", (req, res, next) => {
+app.delete("/programs/remove/:progid", (req, res, next) => {
     console.log("post /program/remove called")
     programs = programs.filter(p => p.id != req.params.progid)
     res.json(programs)
 
 })
 
-app.post("/program/install/:netrunnerid", (req, res, next) => {
+app.post("/programs/install/:netrunnerid", (req, res, next) => {
     console.log("post /program/install called")
     
     let programName = req.body.programName
     let netrunner = netrunners.find(n => n.id == req.params.netrunnerid)
     let ipfn = programs.filter(p => p.netrunnerid == req.params.netrunnerid) //installed programs for netrunner (ipnf)
 
-    console.log(`Installing program '${programName}' for Netrunner ${netrunner.id}`)
+    if(netrunner != undefined) {
+        console.log(`Installing program '${programName}' for Netrunner ${netrunner.id}`)
 
-    if(programName != undefined) {
-        let prog = programList.find(p => p.name == programName)
-        if(prog != undefined) {
-            console.log("Found matching program by name")
-            if(ipfn.length < netrunner.totalSlots) {
-                console.log("Installing program")
-                let newProgID = programs.length > 0 ? programs.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
-                prog = {...prog, "id": newProgID, "maxrez": prog.rez, "activationcount":0, "netrunnerid": req.params.netrunnerid, "isactivated":0}
-                programs = [...programs, prog]
+        if(programName != undefined) {
+            let prog = programList.find(p => p.name == programName)
+            if(prog != undefined) {
+                console.log("Found matching program by name")
+                if(ipfn.length < netrunner.totalSlots) {
+                    console.log("Installing program")
+                    let newProgID = programs.length > 0 ? programs.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
+                    prog = {...prog, "id": newProgID, "maxrez": prog.rez, "activationcount":0, "netrunnerid": req.params.netrunnerid, "isactivated":0}
+                    programs = [...programs, prog]
+                } else {
+                    console.log("That netrunner doesn't have enough free spots to install a new program")
+                }
             } else {
-                console.log("That netrunner doesn't have enough free spots to install a new program")
+                console.log("Could not find program by that name")
             }
-        } else {
-            console.log("Could not find program by that name")
         }
     }
-
     res.json(programs) 
  
 })
@@ -284,8 +208,28 @@ app.post("/program/install/:netrunnerid", (req, res, next) => {
 
 
 ///------------------------  BLACKICE FUNCTIONS ------------------------////
-//TODO damage ice
-//TODO set tracking
+app.post("/ice/damage/:iceid", (req, res, next) => {
+    console.log("post /ice/damage called")
+    let ice = ices.find(i => i.id==req.params.iceid)
+    let damage = req.body.damage
+    if(ice != undefined && damage != undefined && damage > 0) {
+        console.log(`found target ice, damaging by ${damage}`)
+        ices = ices.map(i => {
+            if(i.id == req.params.iceid) {
+                i.Rez -= damage
+                if(i.Rez <= 0) {
+                    console.log(`ICE ${i.name} has been derezzed from damage`)
+                    i.Rez = 0
+                    i.isactive = 0
+                }
+            }
+            return i
+        }) 
+    } else {
+        console.log("could not apply damage")
+    }
+    res.json(ice)
+})
 
 app.post("/ice/:iceid?", (req, res, next) => {
     console.log("post /ice called")
@@ -330,7 +274,6 @@ app.get("/ice/:iceid?", (req, res, next) => {
 
 
 ///------------------------  MAP PATHFINDING FUNCTIONS ------------------------////
-
 function mapOriginRoom(mapid) {
     return rooms.find(r => r.mapid == mapid && r.sourceroom == undefined)
 }
@@ -355,12 +298,9 @@ function pathfind(netrunnerid, origin, dvroll) {
             console.log(`Roomid ${roomid} contains ${thisRoomContents.type}`)
         }
         let iceList = ices.filter(i => i.roomid == roomid) 
-        iceList.forEach(i => { console.log(`Room ${roomid} contains ICE: ${i.name}`)})
+        iceList.forEach(i => { console.log(`Room ${roomid} contains ICE: ${i.name} ${i.isactive == 0 ? "(dead)" : "(alive)"}`)})
         let runnerList = netrunners.filter(n => n.roomid == roomid)
         runnerList.forEach(n => { console.log(`Room ${roomid} contains NETRUNNER: ${n.name}`)})
-
-
-        //TODO check for ice or other netrunners and show those too
 
         let nextrooms = rooms.filter(room => room.sourceroom == roomid)
 
@@ -429,7 +369,6 @@ app.post("/pathfind/:netrunnerid/:mapid", (req, res, next) => {
 })
 
 ///------------------------  NETRUNNER FUNCTIONS ------------------------////
-
 app.post("/netrunner/:netrunnerid?", (req, res, next) => {
     console.log("post /netrunner called")
 
@@ -439,7 +378,7 @@ app.post("/netrunner/:netrunnerid?", (req, res, next) => {
     } else {
         console.log("Did not find a netrunner with that id, adding a new netrunner")
         let newNetrunnerID = netrunners.length > 0 ? netrunners.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
-        netrunners = [...netrunners, {...req.body, "id": newNetrunnerID }]
+        netrunners = [...netrunners, {...defaultNetrunner, ...req.body, "id": newNetrunnerID }]
     }
 
     res.json(netrunners);
@@ -457,10 +396,9 @@ app.get("/netrunner/:netrunnerid?", (req, res, next) => {
     res.json(retVal)
 })
 
-
-
 ///------------------------  ROOM CONTENTS FUNCTIONS ------------------------////
-
+//TODO there's a bug here.  when you call upate you can update a content iD that has a mismatched room id.  
+//its no big deal because the roomid passed in doesn't do anything on a content update, only there to validate for new items
 app.post("/roomcontents/:roomid/:contentid?", (req, res, next) => {
     console.log("post /roomcontents called")
 
@@ -502,8 +440,7 @@ app.get("/roomcontents/:roomid/:contentid?", (req, res, next) => {
 })
 
 ///------------------------  ROOM FUNCTIONS ------------------------////
-
-
+//TODO DEAL WITH PLAYERS BEATING PASSWORDS
 app.delete("/room/:roomid", (req, res, next) => {
     console.log("delete /room called")
     rooms = rooms.filter(r => r.id != req.params.roomid) 
