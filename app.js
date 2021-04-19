@@ -1,3 +1,10 @@
+//TODO
+// Perform action for netrunner
+// Perform actions for ICE
+// Build demon code - perform actions for demon
+// Update player movement to incorporate immediate action by ICE
+// Simple initiative I/O
+
 var express = require("express");
 var app = express();
 app.use(express.json()); //Used to parse JSON bodies
@@ -55,7 +62,7 @@ var roomcontents = [
 ];
 
 var netrunnerAccess = [
-    //{"id": 1, "netrunnerid": 1, "roomid": 6}
+    //  {"id": 1, "netrunnerid": 1, "roomid": 6}
 ]
 
 const defaultNetrunner = {"interface": 4, "totalSlots": 3, "speed": 4, "damage": 0, "discoveredrooms":[]}
@@ -71,7 +78,32 @@ var ices = [
 
 var programs = [] //this is rezzed programs.  this will be full copies of programs.
 var demons = [] 
-var initQueue = []; // [{"type": "netrunner", "id": 1}] in descending order
+var initQueue = [
+    {
+        "id": 1,
+        "type": "ice",
+        "thingID": "2",
+        "order": 9
+    },
+    {
+        "id": 2,
+        "type": "netrunner",
+        "thingID": "1",
+        "order": 19
+    },
+    {
+        "id": 3,
+        "type": "netrunner",
+        "thingID": "2",
+        "order": 6
+    },
+    {
+        "id": 4,
+        "type": "ice",
+        "thingID": "1",
+        "order": 22
+    }
+] // [{"type": "netrunner", "id": 1}] in descending order
 var abilities = [
     "Scanner",
     "Backdoor",
@@ -631,6 +663,59 @@ app.post("/map/:mapid?", (req, res, next)=>{
 app.get("/map/:mapid?", (req, res, next)=>{
     let retVal = req.params.mapid != undefined ? archs.filter(m => m.id == req.params.mapid) : archs
     res.json(retVal)
+})
+
+
+///-------------------------initiative functions----------------------//////
+function setInitiative(initType, thingID, roll) {
+
+    //Set the roll value to the top of the initiative if roll=="top"
+    roll = roll == "top" ? (initQueue.reduce((a,b)=>a.order>b.order?a:b).order)+1 : roll
+    roll = Number(roll)
+    let existingThing = initQueue.find(q => q.thingID == thingID && q.type == initType) //if we find the thing, time to change the thing
+
+    if(existingThing != undefined) {
+        initQueue = initQueue.map(q => q.id == existingThing.id ? {...q, "thingID": thingID, "type": initType, "order": roll} : q)
+    } else {
+        let newQueueID = initQueue.length > 0 ? initQueue.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
+        initQueue = [...initQueue, {"id": newQueueID, "type": initType, "thingID": thingID, "order": roll}]
+    }
+    return null
+}
+
+app.get("/initiative", (req, res, next) => {
+    console.log("get /initiative called")
+    let sortedFlag=req.query["sort"]
+
+
+    if(sortedFlag != undefined) {
+        console.log("returning sorted list")
+        let sorted = initQueue.sort((a, b) => (a.order > b.order) ? -1 : 1)
+        res.json(sorted)
+    } else {
+        res.json(initQueue)
+    }
+
+})
+
+app.post("/initiative/:initType/:id", (req, res, next) => {
+    console.log("post /initiative called")
+    let rollValue = req.body.roll
+
+    if(rollValue) {
+        console.log("A roll was passed, updating initQueue")
+        setInitiative(req.params.initType, req.params.id, rollValue)        
+    } else {
+        console.log("No roll was passed")
+    }
+
+    res.json(initQueue)
+})
+
+app.delete("/initiative/:initID", (req, res, next) => {
+    console.log("delete /initiative called")
+    initQueue = initQueue.filter(q => q.id != req.params.initID)
+    res.json(initQueue)
 })
 
 
