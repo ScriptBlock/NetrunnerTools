@@ -55,7 +55,7 @@ var roomcontents = [
 ];
 
 var netrunnerAccess = [
-    {"id": 1, "netrunnerid": 1, "roomid": 6}
+    //{"id": 1, "netrunnerid": 1, "roomid": 6}
 ]
 
 const defaultNetrunner = {"interface": 4, "totalSlots": 3, "speed": 4, "damage": 0, "discoveredrooms":[]}
@@ -406,7 +406,51 @@ app.get("/netrunner/:netrunnerid?", (req, res, next) => {
     res.json(retVal)
 })
 
+app.post("/netrunner/:netrunnerid/move/:targetroom", (req, res, next) => {
+    console.log("post netrunner/nid/move/room called")
 
+    let runner = netrunners.find(n => n.id == req.params.netrunnerid)
+    let targetRoom = rooms.find(r => r.id == req.params.targetroom)
+    let sourceRoom = rooms.find(r => r.id == runner.roomid)
+    let sourceRoomContent = roomcontents.find(c => c.roomid == sourceRoom.id)
+
+    let targetRoomDiscovered = runner.discoveredrooms.includes(targetRoom.id)
+    console.log(`Target room has already been discovered ${targetRoomDiscovered != undefined}`)
+
+    let direction = targetRoom.id == sourceRoom.sourceroom ? "backwards" : "forwards"
+    console.log(`The requested movement is ${direction}`)
+
+    let moveToTargetRoom = false
+    
+    if(direction == "backwards") {
+        console.log("Allowing movement, the direction is backwards")
+        moveToTargetRoom = true
+    } else {
+        if(targetRoomDiscovered) {
+            console.log("The requested next room has been discovered...")
+            if(sourceRoomContent != undefined && sourceRoomContent.type == "password") { 
+                console.log("The room they are trying to leave is password protected")
+                if(netrunnerAccess.find(a => a.netrunnerid == runner.id && a.roomid == sourceRoom.id) != undefined) {
+                    console.log("They have already unlocked this password")
+                    moveToTargetRoom = true
+                } else {
+                    console.log("This password has not yet been bypassed")
+                }
+            } else {
+                console.log("This room contents isn't a blocker and has been discovered to allowing movement")
+                moveToTargetRoom = true
+            }
+        } else {
+            console.log("Blocking movement as the requested room hasn't been discovered")
+        }
+    }
+
+    if(moveToTargetRoom) {
+        netrunners = netrunners.map(n => n.id == runner.id ? { ...n, "roomid": targetRoom.id}:n)
+    }
+
+    res.json(netrunners)
+})
 /*
 var roomcontents = [
     {"id": 1, "roomid": 1, "type": "password", "details": "hunter2", "dv":10}, 
