@@ -5,13 +5,16 @@
 // Update player movement to incorporate immediate action by ICE
 // Simple initiative I/O
 
-var express = require("express");
-var app = express();
-app.use(express.json()); //Used to parse JSON bodies
+var express = require("express")
+var cors = require('cors')
+
+var app = express()
+app.use(cors())
+app.use(express.json()) //Used to parse JSON bodies
 
 var programList = require("./programs")
-var iceList = require("./blackices");
-const { json } = require("express");
+var iceList = require("./blackices")
+const { json } = require("express")
 
 //var archs = []
 var archs = [{ "name":"Arasaka Tower", "description": "Default", "owner": 3, "id": 1 }]
@@ -65,10 +68,10 @@ var netrunnerAccess = [
     //  {"id": 1, "netrunnerid": 1, "roomid": 6}
 ]
 
-const defaultNetrunner = {"interface": 4, "totalSlots": 3, "speed": 4, "damage": 0, "discoveredrooms":[]}
+const defaultNetrunner = {"interface": 4, "totalSlots": 3, "speed": 4, "damage": 0, "discoveredrooms":[], "owner":0}
 
 var netrunners = [
-    {"id": 1, "name": "CrashOverride", "interface": 4, "totalSlots": 3, "speed": 4, "damage": 0, "mapid":1, "roomid":1, "discoveredrooms":[]}
+    {"id": 1, "name": "CrashOverride", "interface": 4, "totalSlots": 3, "speed": 4, "damage": 0, "mapid":1, "roomid":1, "discoveredrooms":[], "owner":0}
 ]
 
 var ices = [
@@ -121,6 +124,72 @@ var abilities = [
 function getRndInteger(min, max) {
     return Math.floor(Math.random() * (max - min + 1) ) + min;
 }
+
+///-----------------------action functions--------------------------------///
+app.post("/action/slide/:netrunnerid", (req, res, next) => {
+    console.log("post /action/slide called")
+    dv = Number(req.body.dv)
+    runner = netrunners.find(n => n.id == req.params.netrunnerid)
+    trackingIce = ices.find(i = i.tracking == runner.id)
+    if(dv >= iceDVroll) { //TODO dereive iceDVroll
+        console.log("the player's DV was sufficient to slide.  Escaping")
+        ices = ices.map(i => i.id == trackingIce.id ? {...i, "tracking":0} : i)
+    } else {
+        console.log("player's DV for slide failed")
+        //TODO what's the consequence
+    }
+
+    res.json(ices)
+})
+
+app.post("/enterpassword/:roomid/:netrunnerid", (req, res, next) => {
+    console.log(`post /enterpassword called`)
+    let runner = netrunners.find(n => n.id == req.params.netrunnerid)
+    let content = roomcontents.find(c => c.roomid == req.params.roomid && c.type == "password")
+    let existingAccess = netrunnerAccess.find(a => a.roomid == content.roomid && a.netrunnerid == runner.id)
+    let password = req.body.pwd
+
+    if(existingAccess == undefined) {
+        if(runner != undefined && content != undefined && password != undefined) {
+            console.log(`Entering password ${password} for room ${content.roomid} by netrunner ${runner.id}`)
+            if(content.details == password) {
+                console.log("Password entered successfully")
+                let newAccessID = netrunnerAccess.length > 0 ? netrunnerAccess.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
+                netrunnerAccess = [...netrunnerAccess, {"id":newAccessID, "netrunnerid": runner.id, "roomid": content.roomid}]
+            } else {
+                console.log("invalid password")
+            }
+        }
+    } else {
+        console.log("That netrunner already has access to that room")
+    }
+    res.json(netrunnerAccess)
+
+})
+
+app.post("/backdoor/:roomid/:netrunnerid", (req, res, next) => {
+    console.log("post /backdoor called")
+    let runner = netrunners.find(n => n.id == req.params.netrunnerid)
+    let content = roomcontents.find(c => c.roomid == req.params.roomid && c.type == "password")
+    let existingAccess = netrunnerAccess.find(a => a.roomid==req.params.roomid && a.netrunnerid==req.params.netrunnerid)
+    let dv = req.body.dv
+
+    if(existingAccess != undefined) {
+        console.log(`The specified netrunner ${req.params.netrunnerid} and roomid ${req.params.roomid} access is already granted`)
+    } else if(runner == undefined) {
+        console.log("The specified choomba doesn't exist")
+    } else {
+        if(content != undefined && dv != undefined) {
+            if(dv >= content.dv) {
+                console.log(`Provided DV (${dv} beats or equals password dv of ${content.dv})`)
+                let newAccessID = netrunnerAccess.length > 0 ? netrunnerAccess.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
+                netrunnerAccess = [...netrunnerAccess, {"id":newAccessID, "netrunnerid": req.params.netrunnerid, "roomid": req.params.roomid}]
+            }
+        }
+    }
+    res.json(netrunnerAccess)
+})
+
 
 ///------------------------  PROGRAMS FUNCTIONS ------------------------////
 
@@ -479,6 +548,19 @@ app.post("/netrunner/:netrunnerid/move/:targetroom", (req, res, next) => {
 
     if(moveToTargetRoom) {
         netrunners = netrunners.map(n => n.id == runner.id ? { ...n, "roomid": targetRoom.id}:n)
+        iceInRoom = ices.find(i => i.roomid)
+        if(iceInRoom != undefined) {
+            if(iceInRoom.tracking == 0) {
+                console.log("there was ice in that room that wasn't busy tracking another netrunner")
+                ices.map(i => i.id == iceInRoom.id ? { ...i, "tracking": runner.id} : i)
+                setInitiative("ice", iceInRoom.id, "top")
+                //TODO build in the netrunner initiative check 
+                //if(rolledInitiative < iceInRoom.initiativeCheck) {
+                //console.log(iceList.find(il => il.name == iceInRoom.name).Effect)
+            } else {
+                console.log("encountered ICE is already tracking another netrunner")
+            }
+        }
     }
 
     res.json(netrunners)
@@ -506,53 +588,6 @@ var netrunnerAccess = [
 ///------------------------  ROOM CONTENTS FUNCTIONS ------------------------////
 //TODO there's a bug here.  when you call upate you can update a content iD that has a mismatched room id.  
 //its no big deal because the roomid passed in doesn't do anything on a content update, only there to validate for new items
-app.post("/enterpassword/:roomid/:netrunnerid", (req, res, next) => {
-    console.log(`post /enterpassword called`)
-    let runner = netrunners.find(n => n.id == req.params.netrunnerid)
-    let content = roomcontents.find(c => c.roomid == req.params.roomid && c.type == "password")
-    let existingAccess = netrunnerAccess.find(a => a.roomid == content.roomid && a.netrunnerid == runner.id)
-    let password = req.body.pwd
-
-    if(existingAccess == undefined) {
-        if(runner != undefined && content != undefined && password != undefined) {
-            console.log(`Entering password ${password} for room ${content.roomid} by netrunner ${runner.id}`)
-            if(content.details == password) {
-                console.log("Password entered successfully")
-                let newAccessID = netrunnerAccess.length > 0 ? netrunnerAccess.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
-                netrunnerAccess = [...netrunnerAccess, {"id":newAccessID, "netrunnerid": runner.id, "roomid": content.roomid}]
-            } else {
-                console.log("invalid password")
-            }
-        }
-    } else {
-        console.log("That netrunner already has access to that room")
-    }
-    res.json(netrunnerAccess)
-
-})
-
-app.post("/backdoor/:roomid/:netrunnerid", (req, res, next) => {
-    console.log("post /backdoor called")
-    let runner = netrunners.find(n => n.id == req.params.netrunnerid)
-    let content = roomcontents.find(c => c.roomid == req.params.roomid && c.type == "password")
-    let existingAccess = netrunnerAccess.find(a => a.roomid==req.params.roomid && a.netrunnerid==req.params.netrunnerid)
-    let dv = req.body.dv
-
-    if(existingAccess != undefined) {
-        console.log(`The specified netrunner ${req.params.netrunnerid} and roomid ${req.params.roomid} access is already granted`)
-    } else if(runner == undefined) {
-        console.log("The specified choomba doesn't exist")
-    } else {
-        if(content != undefined && dv != undefined) {
-            if(dv >= content.dv) {
-                console.log(`Provided DV (${dv} beats or equals password dv of ${content.dv})`)
-                let newAccessID = netrunnerAccess.length > 0 ? netrunnerAccess.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
-                netrunnerAccess = [...netrunnerAccess, {"id":newAccessID, "netrunnerid": req.params.netrunnerid, "roomid": req.params.roomid}]
-            }
-        }
-    }
-    res.json(netrunnerAccess)
-})
 
 app.post("/roomcontents/:roomid/:contentid?", (req, res, next) => {
     console.log("post /roomcontents called")
