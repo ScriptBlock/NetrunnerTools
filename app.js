@@ -68,10 +68,12 @@ var netrunnerAccess = [
     //  {"id": 1, "netrunnerid": 1, "roomid": 6}
 ]
 
-const defaultNetrunner = {"interface": 4, "totalSlots": 3, "speed": 4, "damage": 0, "discoveredrooms":[], "owner":0}
+const defaultNetrunner = {"interface": 4, "slots": 3, "speed": 4, "damage": 0, "discoveredrooms":[], "owner":0, "type": "Other", "reflex":7}
 
 var netrunners = [
-    {"id": 1, "name": "CrashOverride", "interface": 4, "totalSlots": 3, "speed": 4, "damage": 0, "mapid":1, "roomid":1, "discoveredrooms":[], "owner":0}
+    {"id": 1, "name": "CrashOverride", "interface": 4, "slots": 3, "speed": 4, "damage": 0, "mapid":1, "roomid":1, "discoveredrooms":[], "owner":0, "type":"Netrunner", "reflex":7},
+    {"id": 2, "name": "AcidBurn", "interface": 0, "slots": 0, "speed": 4, "damage": 0, "mapid":1, "roomid":1, "discoveredrooms":[], "owner":0, "type":"Other", "reflex":7}
+
 ]
 
 var ices = [
@@ -82,6 +84,9 @@ var ices = [
 var programs = [] //this is rezzed programs.  this will be full copies of programs.
 var demons = [] 
 var initQueue = [
+] // [{"type": "netrunner", "id": 1}] in descending order
+
+/*
     {
         "id": 1,
         "type": "ice",
@@ -106,7 +111,9 @@ var initQueue = [
         "thingID": "1",
         "order": 22
     }
-] // [{"type": "netrunner", "id": 1}] in descending order
+*/
+
+
 var abilities = [
     "Scanner",
     "Backdoor",
@@ -290,7 +297,7 @@ app.post("/programs/install/:netrunnerid", (req, res, next) => {
             let prog = programList.find(p => p.name == programName)
             if(prog != undefined) {
                 console.log("Found matching program by name")
-                if(ipfn.length < netrunner.totalSlots) {
+                if(ipfn.length < netrunner.slots) {
                     console.log("Installing program")
                     let newProgID = programs.length > 0 ? programs.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
                     prog = {...prog, "id": newProgID, "maxrez": prog.rez, "activationcount":0, "netrunnerid": req.params.netrunnerid, "isactivated":0}
@@ -705,7 +712,14 @@ app.get("/map/:mapid?", (req, res, next)=>{
 function setInitiative(initType, thingID, roll) {
 
     //Set the roll value to the top of the initiative if roll=="top"
-    roll = roll == "top" ? (initQueue.reduce((a,b)=>a.order>b.order?a:b).order)+1 : roll
+    if(roll == "top") {
+        if(initQueue.length == 0) {
+            roll=1
+        } else {
+            roll = (initQueue.reduce((a,b)=>a.order>b.order?a:b).order)+1
+        }
+    }
+    //roll = roll == "top" ? (initQueue.reduce((a,b)=>a.order>b.order?a:b).order)+1 : roll
     roll = Number(roll)
     let existingThing = initQueue.find(q => q.thingID == thingID && q.type == initType) //if we find the thing, time to change the thing
 
