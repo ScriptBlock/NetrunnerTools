@@ -724,10 +724,10 @@ function setInitiative(initType, thingID, roll) {
     let existingThing = initQueue.find(q => q.thingID == thingID && q.type == initType) //if we find the thing, time to change the thing
 
     if(existingThing != undefined) {
-        initQueue = initQueue.map(q => q.id == existingThing.id ? {...q, "thingID": thingID, "type": initType, "order": roll} : q)
+        initQueue = initQueue.map(q => q.id == existingThing.id ? {...q, "thingID": thingID, "type": initType, "order": roll, "active": false} : q)
     } else {
         let newQueueID = initQueue.length > 0 ? initQueue.reduce((a,b)=>a.id>b.id?a:b).id + 1 : 1
-        initQueue = [...initQueue, {"id": newQueueID, "type": initType, "thingID": thingID, "order": roll}]
+        initQueue = [...initQueue, {"id": newQueueID, "type": initType, "thingID": thingID, "order": roll, "active": false}]
     }
     return null
 }
@@ -745,6 +745,11 @@ app.get("/initiative", (req, res, next) => {
         res.json(initQueue)
     }
 
+})
+
+app.post("/setactiveinit/:id", (req, res, next) => {
+    console.log("post /setactiveinit called")
+    initQueue = initQueue.map(q => q.id == req.params.id ? {...q, active: true} : {...q, active: false})
 })
 
 app.post("/initiative/:initType/:id", (req, res, next) => {
