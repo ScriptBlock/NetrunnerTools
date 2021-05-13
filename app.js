@@ -750,6 +750,28 @@ app.get("/initiative", (req, res, next) => {
 app.post("/setactiveinit/:id", (req, res, next) => {
     console.log("post /setactiveinit called")
     initQueue = initQueue.map(q => q.id == req.params.id ? {...q, active: true} : {...q, active: false})
+    res.json(initQueue)
+})
+
+app.post("/initiative/next", (req, res, next) => {
+    console.log("called next initiative")
+    let sorted = initQueue.sort((a, b) => (a.order > b.order) ? -1 : 1)
+
+    let nextActive = -1
+    sorted.forEach((i, j) => {
+        if(i.active) {
+            console.log(`found the current active - array item ${j} - id ${i.id}`)
+            if(j+1 == sorted.length) {
+                console.log("reached end of init")
+                nextActive = sorted[0].id
+            } else {
+                console.log("moving to next - not at end")
+                nextActive = sorted[j+1].id
+            }
+        }
+    })
+    initQueue = initQueue.map(q => q.id == nextActive ? {...q, active: true} : {...q, active: false})
+    res.json(initQueue)
 })
 
 app.post("/initiative/:initType/:id", (req, res, next) => {
@@ -766,9 +788,14 @@ app.post("/initiative/:initType/:id", (req, res, next) => {
     res.json(initQueue)
 })
 
-app.delete("/initiative/:initID", (req, res, next) => {
+app.delete("/initiative/:initID?", (req, res, next) => {
     console.log("delete /initiative called")
-    initQueue = initQueue.filter(q => q.id != req.params.initID)
+    if(req.params.initID != undefined && req.params.initID != null) {
+        initQueue = initQueue.filter(q => q.id != req.params.initID)
+    } else {
+        initQueue = []
+    }
+    
     res.json(initQueue)
 })
 
