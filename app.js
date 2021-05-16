@@ -17,7 +17,12 @@ var iceList = require("./blackices")
 const { json } = require("express")
 
 //var archs = []
-var archs = [{ "name":"Arasaka Tower", "description": "Default", "owner": 3, "id": 1 }]
+var archs = [
+    { "name":"Arasaka Tower", "description": "The most secure NET in all of Night City.  You better be a bad-ass before you jack in here.", "owner": 3, "id": 1, "visibletoall": true, "visibleto": [] },
+    { "name":"Tiger Claw Drug House", "description": "These guys all share the same computer with no password.  Have fun.", "owner": 3, "id": 2, "visibletoall": true, "visibleto": [] },
+    { "name":"Rave - Night Club", "description": "This location contains all of the systems that control the audio/video equipment for the club. ", "owner": 3, "id": 3, "visibletoall": true, "visibleto": [] }
+
+]
 
 var rooms = [{"id":1, "name": "origin", "mapid": 1},
 {"id":2, "name": "l2r1", "sourceroom": 1, "mapid": 1},
@@ -28,7 +33,8 @@ var rooms = [{"id":1, "name": "origin", "mapid": 1},
 {"id":7, "name": "l5r1", "sourceroom": 6, "mapid": 1},
 {"id":8, "name": "l6r1", "sourceroom": 7, "mapid": 1},
 {"id":9, "name": "l4r2", "sourceroom": 5, "mapid": 1},
-{"id":10, "name": "l5r2", "sourceroom": 9, "mapid": 1}
+{"id":10, "name": "l5r2", "sourceroom": 9, "mapid": 1}//,
+//{"id":11, "name": "l4r1", "sourceroom": 5, "mapid": 1}
 ]
 
 /*
@@ -270,7 +276,6 @@ app.post("/programs/activate/:progid", (req, res, next) => {
 
 app.get("/programs/installed/:netrunnerid", (req, res, next) => {
     console.log("get /program/installed called")
-
     let retVal = programs.filter(p => p.netrunnerid == req.params.netrunnerid)
     res.json(retVal)
 
@@ -702,10 +707,31 @@ app.post("/map/:mapid?", (req, res, next)=>{
     // next();
 });
 
-app.get("/map/:mapid?", (req, res, next)=>{
-    let retVal = req.params.mapid != undefined ? archs.filter(m => m.id == req.params.mapid) : archs
+app.get("/map/:mapid", (req, res, next)=>{
+    //let playerID = req.body.playerID
+    let retVal = archs.find(m => m.id == req.params.mapid)
+    // if(playerID == "gm") {
+    //     retVal = archs.find(m => m.id == req.params.mapid)
+    // } else {
+    //     retVal = archs.find(m => m.id == req.params.mapid && (m.visibletoall || m.visibleto.includes(playerID)))
+    // }
     res.json(retVal)
 })
+
+app.get("/maps", (req, res, next)=>{
+    let playerID = req.query["playerID"]
+    let retVal = {}
+    if(playerID != undefined) {
+        if(playerID == "gm") {
+            retVal = archs
+        } else {
+            retVal = archs.filter(m => m.visibletoall || m.visibleto.includes(playerID))
+        }    
+    }
+    res.json(retVal)
+})
+
+
 
 
 ///-------------------------initiative functions----------------------//////
