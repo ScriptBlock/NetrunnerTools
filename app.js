@@ -71,7 +71,7 @@ var roomcontents = [
 ];
 
 var netrunnerAccess = [
-    //  {"id": 1, "netrunnerid": 1, "roomid": 6}
+    // {"id": 1, "netrunnerid": 1, "roomid": 6}
 ]
 
 const defaultNetrunner = {"interface": 4, "slots": 3, "speed": 4, "damage": 0, "discoveredrooms":[], "owner":0, "type": "Other", "reflex":7}
@@ -630,6 +630,17 @@ app.delete("/roomcontents/:contentid", (req, res, next) => {
 
     res.json(roomcontents)
 
+})
+
+app.get("/mapcontents/:mapid", (req, res, next) => {
+    console.log("get /mapcontents called")
+
+    let contentsForMap = rooms.map(r => roomcontents.find(c => c.roomid == r.id))
+    contentsForMap = contentsForMap.filter(c => c != null)
+    console.log("rooms for map")
+    console.log(contentsForMap)
+
+    res.json(contentsForMap)
 })
 
 app.get("/roomcontents/:roomid/:contentid?", (req, res, next) => {
