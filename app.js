@@ -652,7 +652,7 @@ app.get("/roomcontents/:roomid/:contentid?", (req, res, next) => {
 
 })
 
-
+//TODO write a function that returns all of the rooms and contents with appropriate visibility rules as an all-in-one object to make the UI easier.
 
 ///------------------------  ROOM FUNCTIONS ------------------------////
 app.delete("/room/:roomid", (req, res, next) => {
