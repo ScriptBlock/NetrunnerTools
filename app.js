@@ -33,8 +33,8 @@ var rooms = [{"id":1, "name": "origin", "mapid": 1},
 {"id":7, "name": "l5r1", "sourceroom": 6, "mapid": 1},
 {"id":8, "name": "l6r1", "sourceroom": 7, "mapid": 1},
 {"id":9, "name": "l4r2", "sourceroom": 5, "mapid": 1},
-{"id":10, "name": "l5r2", "sourceroom": 9, "mapid": 1}//,
-//{"id":11, "name": "l4r1", "sourceroom": 5, "mapid": 1}
+{"id":10, "name": "l5r2", "sourceroom": 9, "mapid": 1},
+{"id":11, "name": "l4r1", "sourceroom": 5, "mapid": 1}
 ]
 
 /*
@@ -392,14 +392,14 @@ function mapOriginRoom(mapid) {
     return rooms.find(r => r.mapid == mapid && r.sourceroom == undefined)
 }
 
-function pathfind(netrunnerid, origin, dvroll) {
+function pathfind(netrunnerid, origin, dvroll, maxDepth) {
     console.log("starting pathfinder")
     console.log(`origin ${origin}`)
 	var foundRooms = []
 
-    doroom(netrunnerid, origin, dvroll)
+    doroom(netrunnerid, origin, dvroll, 0)
 
-	function doroom(netrunnerid, roomid, dvroll) {
+	function doroom(netrunnerid, roomid, dvroll, currentDepth) {
         console.log("==========================================")
         //ease of access
         netrunnerObject = netrunners.find(n => n.id == netrunnerid)
@@ -448,11 +448,16 @@ function pathfind(netrunnerid, origin, dvroll) {
             traverseDown = true
         }
 
+        if(currentDepth+1 > maxDepth) {
+            console.log("reached max depth")
+            traverseDown = false
+        }
+
         if(traverseDown) {
     		if(nextrooms.length > 0) {
 	    		nextrooms.forEach(room => {
                     console.log(`next room to discover ${room.id}`)
-				    doroom(netrunnerid, room.id, dvroll)
+				    doroom(netrunnerid, room.id, dvroll, currentDepth+1)
 			    })
             }
 
@@ -462,19 +467,24 @@ function pathfind(netrunnerid, origin, dvroll) {
 	return foundRooms
 }
 
-//TODO make a version of this where you can specify a starting room and possibly 
-// incorporate maximum depth searches due to netrunner level - this is in the rules and would provide
-// a way to limit the depth of discovery of an architecture
 app.post("/pathfind/:netrunnerid/:mapid", (req, res, next) => {
     console.log("post /pathfind called")
     let rolledDV = req.body.dv
+    let startingRoom = req.body.startingroom
+    let maxDepth = req.body.maxdepth
+
     console.log(`rolled DV ${rolledDV}`)
 
-    let origin = mapOriginRoom(req.params.mapid)
+    let origin = mapOriginRoom(req.params.mapid).id
+
+    if(startingRoom != null) {
+        console.log("pathfinder was passed a starting room, using that instead of mapOrigin")
+        origin = startingRoom
+    }
     console.log("origin room")
     console.log(origin)
 
-    let discoveredRooms = pathfind(req.params.netrunnerid, origin.id, rolledDV)
+    let discoveredRooms = pathfind(req.params.netrunnerid, origin, rolledDV, maxDepth)
     console.log("discoveredRooms: ")
     console.log(discoveredRooms)
 
@@ -688,7 +698,42 @@ app.post("/room/:mapid/:roomid?", (req, res, next) => {
 
 app.get("/room/:mapid/:roomid?", (req, res, next) => {
     console.log("get /room called")
+    let ownedCharacter = req.query["ownedcharacter"]
+    let gatherContext = req.query["gathercontext"]
+
+
+    let mapOrigin = rooms.find(r => r.mapid = req.params.mapid && r.sourceroom == undefined).id
+
+    console.log("getting room listing for mapid", req.params.mapid)
     let retVal = req.params.roomid != undefined ? rooms.filter(r => r.id == req.params.roomid && r.mapid == req.params.mapid) : rooms.filter(r => r.mapid == req.params.mapid)
+    console.log(retVal)
+    console.log("----------------------------------------------")
+    
+    
+    if(ownedCharacter != null) {
+        console.log("a character id was passed in, getting just rooms for that character")
+
+        if(!netrunners.find(n => n.id == ownedCharacter).discoveredrooms.includes(mapOrigin)) {
+            console.log("that character didn't have the origin room for this map, adding")
+            netrunners = netrunners.map(n => n.id == ownedCharacter ? {...n, discoveredrooms: [...n.discoveredrooms, mapOrigin]} : n)
+        }
+        retVal = retVal.filter(r => netrunners.find(n => n.id == ownedCharacter).discoveredrooms.includes(r.id))
+        
+        console.log(retVal)
+        console.log("----------------------------------------------")
+
+    }
+
+    if(gatherContext != null && gatherContext == "true") {
+        console.log("gathering context for all valid rooms")
+
+        retVal = retVal.map(r => ({...r, "contents":roomcontents.find(rc => rc.roomid == r.id)}))
+
+        console.log(retVal)
+        console.log("----------------------------------------------")
+
+    }  
+
     res.json(retVal)
 })
 
