@@ -473,6 +473,19 @@ function pathfind(netrunnerid, origin, dvroll, maxDepth) {
 	return foundRooms
 }
 
+const addNetrunnerDiscoveredRooms = (netrunnerid, roomlist) => {
+    console.log(`adding rooms ${roomlist} to the disovered rooms for nr ${netrunnerid}`)
+    netrunners = netrunners.map(n => {
+        if(n.id == netrunnerid) {
+            let a = new Set(n.discoveredrooms)
+            roomlist.forEach(d => a.add(d))
+            n.discoveredrooms = [...a]
+        }
+        return n            
+    })
+
+}
+
 app.post("/pathfind/:netrunnerid/:mapid", (req, res, next) => {
     console.log("post /pathfind called")
     let rolledDV = req.body.dv
@@ -494,14 +507,15 @@ app.post("/pathfind/:netrunnerid/:mapid", (req, res, next) => {
     console.log("discoveredRooms: ")
     console.log(discoveredRooms)
 
-    netrunners = netrunners.map(n => {
-        if(n.id == req.params.netrunnerid) {
-            let a = new Set(n.discoveredrooms)
-            discoveredRooms.forEach(d => a.add(d))
-            n.discoveredrooms = [...a]
-        }
-        return n            
-    })
+    // netrunners = netrunners.map(n => {
+    //     if(n.id == req.params.netrunnerid) {
+    //         let a = new Set(n.discoveredrooms)
+    //         discoveredRooms.forEach(d => a.add(d))
+    //         n.discoveredrooms = [...a]
+    //     }
+    //     return n            
+    // })
+    addNetrunnerDiscoveredRooms(req.params.netrunnerid, discoveredRooms)
 
     res.json(netrunners)
 
@@ -533,6 +547,57 @@ app.get("/netrunner/:netrunnerid?", (req, res, next) => {
     console.log("get /netrunner called")
     let retVal = req.params.netrunnerid != undefined ? netrunners.filter(n => n.id == req.params.netrunnerid) : netrunners
     res.json(retVal)
+})
+
+const doNetrunnerMove = (netrunnerid, targetroomid) => {
+    console.log(`movinb nr ${netrunnerid} to room ${targetroomid}`)
+
+    netrunners = netrunners.map(n => n.id == netrunnerid ? { ...n, "roomid": targetroomid}:n)
+    iceInRoom = ices.find(i => i.roomid == targetroomid)
+    if(iceInRoom != undefined) {
+        if(iceInRoom.tracking == 0) {
+            console.log("there was ice in that room that wasn't busy tracking another netrunner")
+            ices.map(i => i.id == iceInRoom.id ? { ...i, "tracking": netrunnerid} : i)
+            setInitiative("ice", iceInRoom.id, "top")
+            //TODO build in the netrunner initiative check 
+            //if(rolledInitiative < iceInRoom.initiativeCheck) {
+            //console.log(iceList.find(il => il.name == iceInRoom.name).Effect)
+        } else {
+            console.log("encountered ICE is already tracking another netrunner")
+        }
+    }
+
+}
+
+app.post("/netrunner/:netrunnerid/movedown", (req, res, next) => {
+    let runner = netrunners.find(n => n.id == req.params.netrunnerid)
+    let sourceRoom = rooms.find(r => r.id == runner.roomid)
+    let possibleTargetRooms = rooms.filter(r => r.sourceroom == sourceRoom.id)
+    let sourceRoomContent = roomcontents.find(c => c.roomid == sourceRoom.id)
+
+    let targetRoom = possibleTargetRooms[Math.floor(Math.random()*possibleTargetRooms.length)]
+    console.log(`moving to target room ${targetRoom.id}`)
+
+    if(sourceRoomContent != undefined && sourceRoomContent.type == "password") { 
+        console.log("The room they are trying to leave is password protected")
+        if(netrunnerAccess.find(a => a.netrunnerid == runner.id && a.roomid == sourceRoom.id) != undefined) {
+            console.log("They have already unlocked this password")
+            moveToTargetRoom = true
+        } else {
+            console.log("This password has not yet been bypassed")
+        }
+    } else {
+        console.log("This room contents isn't a blocker and has been discovered to allowing movement")
+        moveToTargetRoom = true
+    }
+
+    if(moveToTargetRoom) {
+        addNetrunnerDiscoveredRooms(runner.id, [targetRoom.id])
+        doNetrunnerMove(runner.id, targetRoom.id)
+    }
+
+    res.json(netrunners)
+
 })
 
 app.post("/netrunner/:netrunnerid/move/:targetroom", (req, res, next) => {
@@ -575,20 +640,22 @@ app.post("/netrunner/:netrunnerid/move/:targetroom", (req, res, next) => {
     }
 
     if(moveToTargetRoom) {
-        netrunners = netrunners.map(n => n.id == runner.id ? { ...n, "roomid": targetRoom.id}:n)
-        iceInRoom = ices.find(i => i.roomid)
-        if(iceInRoom != undefined) {
-            if(iceInRoom.tracking == 0) {
-                console.log("there was ice in that room that wasn't busy tracking another netrunner")
-                ices.map(i => i.id == iceInRoom.id ? { ...i, "tracking": runner.id} : i)
-                setInitiative("ice", iceInRoom.id, "top")
-                //TODO build in the netrunner initiative check 
-                //if(rolledInitiative < iceInRoom.initiativeCheck) {
-                //console.log(iceList.find(il => il.name == iceInRoom.name).Effect)
-            } else {
-                console.log("encountered ICE is already tracking another netrunner")
-            }
-        }
+        doNetrunnerMove(runner.id, targetRoom.id)
+
+        // netrunners = netrunners.map(n => n.id == runner.id ? { ...n, "roomid": targetRoom.id}:n)
+        // iceInRoom = ices.find(i => i.roomid)
+        // if(iceInRoom != undefined) {
+        //     if(iceInRoom.tracking == 0) {
+        //         console.log("there was ice in that room that wasn't busy tracking another netrunner")
+        //         ices.map(i => i.id == iceInRoom.id ? { ...i, "tracking": runner.id} : i)
+        //         setInitiative("ice", iceInRoom.id, "top")
+        //         //TODO build in the netrunner initiative check 
+        //         //if(rolledInitiative < iceInRoom.initiativeCheck) {
+        //         //console.log(iceList.find(il => il.name == iceInRoom.name).Effect)
+        //     } else {
+        //         console.log("encountered ICE is already tracking another netrunner")
+        //     }
+        // }
     }
 
     res.json(netrunners)
