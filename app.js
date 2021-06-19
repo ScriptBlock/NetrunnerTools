@@ -600,9 +600,9 @@ const doNetrunnerMove = (netrunnerid, targetroomid) => {
     if(iceInRoom != undefined) {
         if(iceInRoom.tracking == 0) {
             console.log("there was ice in that room that wasn't busy tracking another netrunner")
-            ices.map(i => i.id == iceInRoom.id ? { ...i, "tracking": netrunnerid} : i)
+            ices = ices.map(i => i.id == iceInRoom.id ? { ...i, "tracking": netrunnerid} : i)
             setInitiative("ice", iceInRoom.id, "top")
-            //TODO build in the netrunner initiative check 
+            //TODO figure out netrunner DV check vs. ice check.  figure out how to alert netrunners of applied effect
             //if(rolledInitiative < iceInRoom.initiativeCheck) {
             //console.log(iceList.find(il => il.name == iceInRoom.name).Effect)
         } else {
