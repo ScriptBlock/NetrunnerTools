@@ -74,11 +74,11 @@ var netrunnerAccess = [
     // {"id": 1, "netrunnerid": 1, "roomid": 6}
 ]
 
-const defaultNetrunner = {"interface": 4, "slots": 3, "speed": 4, "damage": 0, "discoveredrooms":[], "owner":0, "type": "Other", "reflex":7}
+const defaultNetrunner = {"interface": 4, "slots": 3, "speed": 4, "damage": 0, "discoveredrooms":[], "owner":0, "type": "Other", "reflex":7, "ids":[], "controlpoints":[]}
 
 var netrunners = [
-    {"id": 1, "name": "CrashOverride", "interface": 4, "slots": 3, "speed": 4, "damage": 0, "mapid":1, "roomid":1, "discoveredrooms":[], "owner":0, "type":"Netrunner", "reflex":7},
-    {"id": 2, "name": "AcidBurn", "interface": 0, "slots": 0, "speed": 4, "damage": 0, "mapid":1, "roomid":1, "discoveredrooms":[], "owner":0, "type":"Other", "reflex":7}
+    {"id": 1, "name": "CrashOverride", "interface": 4, "slots": 3, "speed": 4, "damage": 0, "mapid":1, "roomid":1, "discoveredrooms":[], "owner":0, "type":"Netrunner", "reflex":7, "ids": [], "controlpoints":[]},
+    {"id": 2, "name": "AcidBurn", "interface": 0, "slots": 0, "speed": 4, "damage": 0, "mapid":1, "roomid":1, "discoveredrooms":[], "owner":0, "type":"Other", "reflex":7, "ids": [], "controlpoints":[]}
 
 ]
 
@@ -139,11 +139,34 @@ function getRndInteger(min, max) {
 }
 
 ///-----------------------action functions--------------------------------///
+
+app.post("/action/id/:netrunnerid", (req, res, next) => {
+    console.log("post /action/slide called")
+    dv = Number(req.body.dv)
+    runner = netrunners.find(n => n.id == req.params.netrunnerid)
+    let fileToID = roomcontents.find(c => c.roomid == runner.roomid)
+    console.log(`trying to ID ${fileToID.details} with dv of ${dv}`)
+    if(!runner.ids.includes(fileToID.id)) {
+        console.log("runner hasn't already IDd that file")
+        if(dv >= fileToID.dv) {
+            console.log("rolled dv was high enough to ID that file")
+            netrunners = netrunners.map(r => r.id == req.params.netrunnerid ? {...r, ids: [...r.ids, fileToID.id]} : r)
+        } else {
+            console.log("rolled dv not high enough to ID that file")
+        }
+    } else {
+        console.log("runner already has the file IDd")
+    }
+    res.json(netrunners)
+
+
+})
+
 app.post("/action/slide/:netrunnerid", (req, res, next) => {
     console.log("post /action/slide called")
     dv = Number(req.body.dv)
     runner = netrunners.find(n => n.id == req.params.netrunnerid)
-    trackingIce = ices.find(i = i.tracking == runner.id)
+    trackingIce = ices.find(i = i.tracking == runner.id) //TODO what if there's more than 1
     if(dv >= iceDVroll) { //TODO dereive iceDVroll
         // console.log("the player's DV was sufficient to slide.  Escaping")
         ices = ices.map(i => i.id == trackingIce.id ? {...i, "tracking":0} : i)
