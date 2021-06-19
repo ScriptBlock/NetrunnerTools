@@ -140,11 +140,33 @@ function getRndInteger(min, max) {
 
 ///-----------------------action functions--------------------------------///
 
+app.post("/action/control/:netrunnerid", (req, res, next) => {
+    console.log("post /action/slide called")
+    dv = Number(req.body.dv)
+    roomid = req.body.roomid
+    runner = netrunners.find(n => n.id == req.params.netrunnerid)
+    let pointToControl = roomcontents.find(c => c.roomid == roomid)
+    console.log(`trying to control ${pointToControl.details} with dv of ${dv}`)
+    if(!runner.controlpoints.includes(pointToControl.id)) {
+        console.log("runner hasn't already controlled that point")
+        if(dv >= pointToControl.dv) {
+            console.log("rolled dv was high enough to control that point")
+            netrunners = netrunners.map(r => r.id == req.params.netrunnerid ? {...r, controlpoints: [...r.ids, pointToControl.id]} : r)
+        } else {
+            console.log("rolled dv not high enough to control that point")
+        }
+    } else {
+        console.log("runner already has the point controlled")
+    }
+    res.json(netrunners)
+})
+
 app.post("/action/id/:netrunnerid", (req, res, next) => {
     console.log("post /action/slide called")
     dv = Number(req.body.dv)
+    roomid = req.body.roomid
     runner = netrunners.find(n => n.id == req.params.netrunnerid)
-    let fileToID = roomcontents.find(c => c.roomid == runner.roomid)
+    let fileToID = roomcontents.find(c => c.roomid == roomid)
     console.log(`trying to ID ${fileToID.details} with dv of ${dv}`)
     if(!runner.ids.includes(fileToID.id)) {
         console.log("runner hasn't already IDd that file")
@@ -158,8 +180,6 @@ app.post("/action/id/:netrunnerid", (req, res, next) => {
         console.log("runner already has the file IDd")
     }
     res.json(netrunners)
-
-
 })
 
 app.post("/action/slide/:netrunnerid", (req, res, next) => {
@@ -834,6 +854,9 @@ app.get("/room/:mapid/:roomid?", (req, res, next) => {
 
         //loop through the netrunner access.  if this room is one that has access then say room open = true.  this is really only valid for password protected rooms
         retVal = retVal.map(r => netrunnerAccess.find(n => n.netrunnerid == ownedCharacter && n.roomid == r.id) ? { ...r, "roomopen": true} : { ...r })
+
+        //loop through any possible ices and attach
+        retVal = retVal.map(r => ({...r, "ices": ices.filter(i=>i.roomid==r.id)}))
 
         // console.log(retVal)
         // console.log("----------------------------------------------")
