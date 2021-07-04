@@ -589,6 +589,7 @@ app.delete("/netrunner/:netrunnerid", (req, res, next) => {
 app.get("/netrunner/:netrunnerid?", (req, res, next) => {
     console.log("get /netrunner called")
     let retVal = req.params.netrunnerid != undefined ? netrunners.filter(n => n.id == req.params.netrunnerid) : netrunners
+    retVal = retVal.map(r => ({...r, programs: programs.filter(p => p.netrunnerid == r.id)}))
     res.json(retVal)
 })
 
@@ -703,25 +704,6 @@ app.post("/netrunner/:netrunnerid/move/:targetroom", (req, res, next) => {
 
     res.json(netrunners)
 })
-/*
-var roomcontents = [
-    {"id": 1, "roomid": 1, "type": "password", "details": "hunter2", "dv":10}, 
-    {"id": 2, "roomid": 2, "type": "controlpoint", "details":"turret", "dv":12},
-    {"id": 3, "roomid": 6, "type": "password", "details":"poooop", "dv":14},
-    {"id": 4, "roomid": 7, "type": "password", "details":"l0vemoney", "dv":18},
-    {"id": 5, "roomid": 8, "type": "root", "details":"root", "dv":0},
-    {"id": 6, "roomid": 5, "type": "file", "details":"Ransom details", "dv":8},
-    {"id": 7, "roomid": 9, "type": "password", "details": "aaaa", "dv": 15},
-    {"id": 8, "roomid": 10, "type": "controlpoint", "details": "guns", "dv": 14}
-
-];
-
-var netrunnerAccess = [
-    {"id": 1, "netrunnerid": 1, "roomid": 1},
-    {"id": 2, "netrunnerid": 1, "roomid": 3}
-]
-
-*/
 
 ///------------------------  ROOM CONTENTS FUNCTIONS ------------------------////
 //TODO there's a bug here.  when you call upate you can update a content iD that has a mismatched room id.  
