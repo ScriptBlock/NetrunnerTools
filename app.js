@@ -251,6 +251,11 @@ app.post("/backdoor/:roomid/:netrunnerid", (req, res, next) => {
 
 ///------------------------  PROGRAMS FUNCTIONS ------------------------////
 
+app.get("/programs", (req, res, next) => {
+    res.json(programList)
+
+})
+
 app.get("/programs/rezzed/:netrunnerid", (req, res, next) => {
     let retVal = programs.filter(p=>p.netrunnerid==req.params.netrunnerid && p.isactivated==1)
     res.json(retVal)
