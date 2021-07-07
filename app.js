@@ -15,6 +15,7 @@ app.use(express.json()) //Used to parse JSON bodies
 var programList = require("./programs")
 var iceList = require("./blackices")
 const { json } = require("express")
+const { restart } = require("nodemon")
 
 //var archs = []
 var archs = [
@@ -74,11 +75,11 @@ var netrunnerAccess = [
     // {"id": 1, "netrunnerid": 1, "roomid": 6}
 ]
 
-const defaultNetrunner = {"interface": 4, "slots": 3, "speed": 4, "damage": 0, "discoveredrooms":[], "owner":0, "type": "Other", "reflex":7, "ids":[], "controlpoints":[]}
+const defaultNetrunner = {"interface": 4, "slots": 3, "speed": 4, "damage": 0, "discoveredrooms":[], "owner":0, "type": "Other", "reflex":7, "ids":[], "controlpoints":[], "mapid": -1, "roomid": -1}
 
 var netrunners = [
-    {"id": 1, "name": "CrashOverride", "interface": 4, "slots": 3, "speed": 4, "damage": 0, "mapid":1, "roomid":1, "discoveredrooms":[], "owner":0, "type":"Netrunner", "reflex":7, "ids": [], "controlpoints":[]},
-    {"id": 2, "name": "AcidBurn", "interface": 0, "slots": 0, "speed": 4, "damage": 0, "mapid":1, "roomid":1, "discoveredrooms":[], "owner":0, "type":"Other", "reflex":7, "ids": [], "controlpoints":[]}
+    {"id": 1, "name": "CrashOverride", "interface": 4, "slots": 3, "speed": 4, "damage": 0, "mapid":-1, "roomid":-1, "discoveredrooms":[], "owner":0, "type":"Netrunner", "reflex":7, "ids": [], "controlpoints":[]},
+    {"id": 2, "name": "AcidBurn", "interface": 0, "slots": 0, "speed": 4, "damage": 0, "mapid":-1, "roomid":-1, "discoveredrooms":[], "owner":0, "type":"Other", "reflex":7, "ids": [], "controlpoints":[]}
 
 ]
 
@@ -854,6 +855,50 @@ app.get("/room/:mapid/:roomid?", (req, res, next) => {
 })
 
 ///------------------------  MAP FUNCTIONS ------------------------////
+app.post("/map/jackin/:netrunnerid/:mapid", (req, res, next) => {
+    let netrunnerid = req.params.netrunnerid
+    let mapid = req.params.mapid
+
+    console.log(`jacking in netrunner ${netrunnerid} into map ${mapid}`)
+    let retVal = {}
+    let runnerCurrentMap = netrunners.find(n => n.id == netrunnerid).mapid
+    if(runnerCurrentMap == -1) {
+        //netrunner isn't already jacked in - go through jackin setup
+        netrunners = netrunners.map(n => n.id == netrunnerid ? {...n, "mapid": mapid, "roomid": 1} : n)
+        retVal = {"result": {"message": "Netrunne Jacked In Successfully", "code": 200}, "payload":netrunners.find(n => n.id == netrunnerid)}
+    } else {
+        retVal = {"result": {"message": "Netrunner Already Jacked In", "code": 500}, "payload":netrunners.find(n => n.id == netrunnerid)}
+        //netrunner is already jacked in somewhere else.  don't bother 
+    }
+
+    res.json(retVal)
+
+
+})
+
+app.post("/map/jackout/:netrunnerid", (req, res, next) => {
+    let netrunnerid = req.params.netrunnerid
+    console.log(`jacking out netrunner ${netrunnerid}`)
+
+    let retVal = {}
+    let runnerCurrentMap = netrunners.find(n => n.id == netrunnerid).mapid
+
+    if(runnerCurrentMap != -1) {
+        console.log("jacking out netrunner")
+        //runner is indeed jacked in - go through jackout steps
+        let candidateIces = ices.filter(i => i.isactive == 1 && i.tracking == netrunnerid)
+        let effects = candidateIces.map(i => ({"source": i.name, "effect": iceList.find(ice => ice.name == i.name).Effect}))
+        netrunners = netrunners.map(n => n.id == netrunnerid ? {...n, "mapid": -1, "roomid":-1, "discoveredrooms":[]}: n)
+        console.log(effects)
+        retVal = {"result": {"message": "Netrunner Jacked Out - Effects In Payload", "code": 200}, "payload":effects}
+    } else {
+        //runner isn't jacked in
+        retVal = {"result": {"message": "Netrunner Isn't Jacked In To An Architecture", "code": 500}, "payload":netrunners.find(n => n.id == netrunnerid)}
+    }
+    res.json(retVal)
+})
+
+
 app.delete("/map/:mapid", (req, res, next)=>{
     console.log("del /map called")
     archs = archs.filter(m => m.id != req.params.mapid)
