@@ -889,6 +889,8 @@ app.post("/map/jackout/:netrunnerid", (req, res, next) => {
         let candidateIces = ices.filter(i => i.isactive == 1 && i.tracking == netrunnerid)
         let effects = candidateIces.map(i => ({"source": i.name, "effect": iceList.find(ice => ice.name == i.name).Effect}))
         netrunners = netrunners.map(n => n.id == netrunnerid ? {...n, "mapid": -1, "roomid":-1, "discoveredrooms":[]}: n)
+        programs = programs.map(p => p.netrunnerid == netrunnerid ? {...p, "isactivated":0, "activationcount": 0, "rez": p.maxrez} : p)
+        //TODO clear candidate ice tracking indicator
         console.log(effects)
         retVal = {"result": {"message": "Netrunner Jacked Out - Effects In Payload", "code": 200}, "payload":effects}
     } else {
