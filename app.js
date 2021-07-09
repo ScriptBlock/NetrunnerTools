@@ -312,9 +312,11 @@ app.post("/programs/activate/:progid", (req, res, next) => {
                 if(p.id == req.params.progid) {
                     p.activationcount += 1
                     p.rez = p.maxrez
-                    if(!p.class.match(/attacker/i)) {
-                        p.isactivated = 1
-                    }
+                    // commented because initiaitive should handle resetting this to inactive
+                    // if(!p.class.match(/attacker/i)) {
+                    //     p.isactivated = 1
+                    // }
+                    p.isactivated = 1
                 } 
                 return p
             })
@@ -890,8 +892,8 @@ app.post("/map/jackout/:netrunnerid", (req, res, next) => {
         let effects = candidateIces.map(i => ({"source": i.name, "effect": iceList.find(ice => ice.name == i.name).Effect}))
         netrunners = netrunners.map(n => n.id == netrunnerid ? {...n, "mapid": -1, "roomid":-1, "discoveredrooms":[]}: n)
         programs = programs.map(p => p.netrunnerid == netrunnerid ? {...p, "isactivated":0, "activationcount": 0, "rez": p.maxrez} : p)
-        //TODO clear candidate ice tracking indicator
-        console.log(effects)
+        ices = ices.map(i => i.tracking == netrunnerid ? {...i, tracking:0}: i)
+        // console.log(effects)
         retVal = {"result": {"message": "Netrunner Jacked Out - Effects In Payload", "code": 200}, "payload":effects}
     } else {
         //runner isn't jacked in
@@ -1016,6 +1018,7 @@ app.post("/initiative/next", (req, res, next) => {
         }
     })
     initQueue = initQueue.map(q => q.id == nextActive ? {...q, active: true} : {...q, active: false})
+    //TODO take action when the player/mob's turn comes back around.  i.e. - reset programs
     res.json(initQueue)
 })
 
