@@ -7,6 +7,8 @@
 
 var express = require("express")
 var cors = require('cors')
+const random = require('random')
+
 
 var app = express()
 app.use(cors())
@@ -78,8 +80,8 @@ var netrunnerAccess = [
 const defaultNetrunner = {"interface": 4, "slots": 3, "speed": 4, "damage": 0, "discoveredrooms":[], "owner":0, "type": "Other", "reflex":7, "ids":[], "controlpoints":[], "mapid": -1, "roomid": -1}
 
 var netrunners = [
-    {"id": 1, "name": "CrashOverride", "interface": 4, "slots": 3, "speed": 4, "damage": 0, "mapid":-1, "roomid":-1, "discoveredrooms":[], "owner":0, "type":"Netrunner", "reflex":7, "ids": [], "controlpoints":[]},
-    {"id": 2, "name": "AcidBurn", "interface": 0, "slots": 0, "speed": 4, "damage": 0, "mapid":-1, "roomid":-1, "discoveredrooms":[], "owner":0, "type":"Other", "reflex":7, "ids": [], "controlpoints":[]}
+    {"id": 1, "name": "CrashOverride", "interface": 4, "slots": 3, "speed": 0, "damage": 0, "mapid":-1, "roomid":-1, "discoveredrooms":[], "owner":0, "type":"Netrunner", "reflex":0, "ids": [], "controlpoints":[]},
+    {"id": 2, "name": "AcidBurn", "interface": 0, "slots": 0, "speed": 4, "damage": 0, "mapid":-1, "roomid":-1, "discoveredrooms":[], "owner":0, "type":"Other", "reflex":0, "ids": [], "controlpoints":[]}
 
 ]
 
@@ -136,13 +138,24 @@ var abilities = [
 
 
 function getRndInteger(min, max) {
-    return Math.floor(Math.random() * (max - min + 1) ) + min;
+/*    min = Math.ceil(min);
+    max = Math.floor(max);
+    return Math.floor(Math.random() * (max - min + 1) + min); //The maximum is inclusive and the minimum is inclusive
+*/
+    return random.int(min,max)
+}
+
+const getRunnerMaxActions = (interface) => {
+    let retVal = interface > 3 ? 3 : 2
+    retVal = interface > 6 ? 4 : retVal
+    retVal = interface > 9 ? 5 : retVal
+    return retVal
 }
 
 ///-----------------------action functions--------------------------------///
 
 app.post("/action/control/:netrunnerid", (req, res, next) => {
-    console.log("post /action/slide called")
+    console.log("post /action/control called")
     dv = Number(req.body.dv)
     roomid = req.body.roomid
     runner = netrunners.find(n => n.id == req.params.netrunnerid)
@@ -163,7 +176,7 @@ app.post("/action/control/:netrunnerid", (req, res, next) => {
 })
 
 app.post("/action/id/:netrunnerid", (req, res, next) => {
-    console.log("post /action/slide called")
+    console.log("post /action/id called")
     dv = Number(req.body.dv)
     roomid = req.body.roomid
     runner = netrunners.find(n => n.id == req.params.netrunnerid)
@@ -187,16 +200,19 @@ app.post("/action/slide/:netrunnerid", (req, res, next) => {
     console.log("post /action/slide called")
     dv = Number(req.body.dv)
     runner = netrunners.find(n => n.id == req.params.netrunnerid)
-    trackingIce = ices.find(i = i.tracking == runner.id) //TODO what if there's more than 1
-    if(dv >= iceDVroll) { //TODO dereive iceDVroll
-        // console.log("the player's DV was sufficient to slide.  Escaping")
+    trackingIce = ices.find(i => i.tracking == runner.id && i.mapid == runner.mapid && i.roomid == runner.roomid) //TODO what if there's more than 1 - that's ok, you can only slide once per round
+    let iceDVroll = trackingIce.Per + getRndInteger(1,10)
+    console.log(`iceDVRoll: ${iceDVroll}`)
+    let retVal = {}
+    if(dv >= iceDVroll) { 
         ices = ices.map(i => i.id == trackingIce.id ? {...i, "tracking":0} : i)
+        retVal = {"result": {"message": `Netrunner Slide Away from ${trackingIce.name}.  Ice rolled ${iceDVroll}`, "code": 200}, "payload":trackingIce}
+        
     } else {
-        // console.log("player's DV for slide failed")
-        //TODO what's the consequence
+        retVal = {"result": {"message": `Netrunner Failed To Slide Away from ${trackingIce.name}. Ice rolled ${iceDVroll}`, "code": 500}, "payload":trackingIce}
     }
 
-    res.json(ices)
+    res.json(retVal)
 })
 
 app.post("/enterpassword/:roomid/:netrunnerid", (req, res, next) => {
@@ -603,21 +619,32 @@ app.get("/netrunner/:netrunnerid?", (req, res, next) => {
 
 const doNetrunnerMove = (netrunnerid, targetroomid) => {
     console.log(`movinb nr ${netrunnerid} to room ${targetroomid}`)
-
+    let thisRunner = netrunners.find(n => n.id == netrunnerid)
     netrunners = netrunners.map(n => n.id == netrunnerid ? { ...n, "roomid": targetroomid}:n)
-    iceInRoom = ices.find(i => i.roomid == targetroomid)
-    if(iceInRoom != undefined) {
-        if(iceInRoom.tracking == 0) {
-            console.log("there was ice in that room that wasn't busy tracking another netrunner")
-            ices = ices.map(i => i.id == iceInRoom.id ? { ...i, "tracking": netrunnerid} : i)
-            setInitiative("ice", iceInRoom.id, "top")
-            //TODO figure out netrunner DV check vs. ice check.  figure out how to alert netrunners of applied effect
-            //if(rolledInitiative < iceInRoom.initiativeCheck) {
-            //console.log(iceList.find(il => il.name == iceInRoom.name).Effect)
-        } else {
-            console.log("encountered ICE is already tracking another netrunner")
-        }
+    iceInRoom = ices.filter(i => i.roomid == targetroomid)
+    let retVal = []
+    if(iceInRoom.length > 0) {
+        iceInRoom.forEach(i => {
+            if(i.tracking == 0) {
+                console.log("there was ice in that room that wasn't busy tracking another netrunner")
+                ices = ices.map(ice => ice.id == i.id ? { ...ice, "tracking": netrunnerid} : ice)
+                let thisIce = iceList.find(il => il.name == i.name)
+                setInitiative("ice", i.id, "top")
+
+                let iceSpeedRoll = i.Spd + getRndInteger(1,10)
+                let runnerSpeedRoll = thisRunner.speed + thisRunner.interface + getRndInteger(1,10)
+
+                if(iceSpeedRoll > runnerSpeedRoll) {
+                    retVal.push({"result": {"message": `ICE ${i.name} Rolled ${iceSpeedRoll} Wins Speed Roll vs Netrunner ${runnerSpeedRoll}`, "code": 500}, "payload":thisIce})
+                } else {
+                    retVal.push({"result": {"message": `Netrunner Rolled ${runnerSpeedRoll} Wins Speed Roll vs ${i.name} ${iceSpeedRoll}`, "code": 200}, "payload":i})
+                }
+            } else {
+                console.log("encountered ICE is already tracking another netrunner")
+            }
+        })
     }
+    return retVal
 
 }
 
@@ -630,25 +657,30 @@ app.post("/netrunner/:netrunnerid/movedown", (req, res, next) => {
     let targetRoom = possibleTargetRooms[Math.floor(Math.random()*possibleTargetRooms.length)]
     console.log(`moving to target room ${targetRoom.id}`)
 
+    let reason = "Ok"
     if(sourceRoomContent != undefined && sourceRoomContent.type == "password") { 
         console.log("The room they are trying to leave is password protected")
         if(netrunnerAccess.find(a => a.netrunnerid == runner.id && a.roomid == sourceRoom.id) != undefined) {
             console.log("They have already unlocked this password")
             moveToTargetRoom = true
         } else {
+            reason = "The current room is still locked"
             console.log("This password has not yet been bypassed")
         }
     } else {
         console.log("This room contents isn't a blocker and has been discovered to allowing movement")
         moveToTargetRoom = true
     }
-
+    let retVal
     if(moveToTargetRoom) {
         addNetrunnerDiscoveredRooms(runner.id, [targetRoom.id])
-        doNetrunnerMove(runner.id, targetRoom.id)
-    }
+        retVal = doNetrunnerMove(runner.id, targetRoom.id)
+        retVal.push({"result": {"message": `Netrunner Moved to Room`, "code": 200}, "payload":targetRoom})
+    } else {
+        retVal = {"result": {"message": `Netrunner Could not move to target room`, "code": 500}, "payload":reason}
 
-    res.json(netrunners)
+    }
+    res.json(retVal)
 
 })
 
@@ -667,7 +699,7 @@ app.post("/netrunner/:netrunnerid/move/:targetroom", (req, res, next) => {
     console.log(`The requested movement is ${direction}`)
 
     let moveToTargetRoom = false
-    
+    let reason = "Ok"
     if(direction == "backwards") {
         console.log("Allowing movement, the direction is backwards")
         moveToTargetRoom = true
@@ -681,36 +713,30 @@ app.post("/netrunner/:netrunnerid/move/:targetroom", (req, res, next) => {
                     moveToTargetRoom = true
                 } else {
                     console.log("This password has not yet been bypassed")
+                    reason = "The current room is still locked"
+
                 }
             } else {
                 console.log("This room contents isn't a blocker and has been discovered to allowing movement")
                 moveToTargetRoom = true
             }
         } else {
+            reason = "The requested room hasn't yet been discovered.  Safety check"
             console.log("Blocking movement as the requested room hasn't been discovered")
         }
     }
-
+    let retval = {}
     if(moveToTargetRoom) {
-        doNetrunnerMove(runner.id, targetRoom.id)
+        addNetrunnerDiscoveredRooms(runner.id, [targetRoom.id])
+        retVal = doNetrunnerMove(runner.id, targetRoom.id)
+        retVal.push({"result": {"message": `Netrunner Moved to Room`, "code": 200}, "payload":targetRoom})
+    } else {
+        retVal = {"result": {"message": `Netrunner Could not move to target room`, "code": 500}, "payload":reason}
 
-        // netrunners = netrunners.map(n => n.id == runner.id ? { ...n, "roomid": targetRoom.id}:n)
-        // iceInRoom = ices.find(i => i.roomid)
-        // if(iceInRoom != undefined) {
-        //     if(iceInRoom.tracking == 0) {
-        //         console.log("there was ice in that room that wasn't busy tracking another netrunner")
-        //         ices.map(i => i.id == iceInRoom.id ? { ...i, "tracking": runner.id} : i)
-        //         setInitiative("ice", iceInRoom.id, "top")
-        //         //TODO build in the netrunner initiative check 
-        //         //if(rolledInitiative < iceInRoom.initiativeCheck) {
-        //         //console.log(iceList.find(il => il.name == iceInRoom.name).Effect)
-        //     } else {
-        //         console.log("encountered ICE is already tracking another netrunner")
-        //     }
-        // }
     }
 
-    res.json(netrunners)
+
+    res.json(retVal)
 })
 
 ///------------------------  ROOM CONTENTS FUNCTIONS ------------------------////
@@ -1059,6 +1085,8 @@ app.use((req, res, next) => {
     console.log("hit middleware");
     res.json(req.newobj);
 })
+
+
 
 app.listen(3000, () => {
  console.log("Server running on port 3000");
