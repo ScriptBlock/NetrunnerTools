@@ -454,6 +454,17 @@ app.delete("/ice/:iceid", (req, res, next) => {
 app.get("/ice/:iceid?", (req, res, next) => {
     console.log("get /ice called")
     let retVal = req.params.iceid != undefined ? ices.filter(i => i.id == req.params.iceid) : ices
+
+    // initQueue = [...initQueue, {"id": newQueueID, "type": initType, "thingID": thingID, "order": roll, "active": false}]
+    retVal = retVal.map(i => (
+        {
+            ...i, 
+            initActive: initQueue.find(q => q.thingID == i.id && q.type == "ice") == undefined ? 
+                false : initQueue.find(q => q.thingID == i.id && q.type == "ice").active
+        }
+    ))
+
+
     res.json(retVal)
 })
 
@@ -614,6 +625,16 @@ app.get("/netrunner/:netrunnerid?", (req, res, next) => {
     console.log("get /netrunner called")
     let retVal = req.params.netrunnerid != undefined ? netrunners.filter(n => n.id == req.params.netrunnerid) : netrunners
     retVal = retVal.map(r => ({...r, programs: programs.filter(p => p.netrunnerid == r.id)}))
+    
+    // initQueue = [...initQueue, {"id": newQueueID, "type": initType, "thingID": thingID, "order": roll, "active": false}]
+    retVal = retVal.map(r => (
+        {
+            ...r, 
+            initActive: initQueue.find(q => q.thingID == r.id && q.type == "netrunner") == undefined ? 
+                false : initQueue.find(q => q.thingID == r.id && q.type == "netrunner").active
+        }
+    ))
+             
     res.json(retVal)
 })
 
